@@ -40,39 +40,37 @@ _After_
 ![Taskbar context menu](https://raw.githubusercontent.com/loliri/windhawk-taskbar-margin/main/images/jumplist.png) \
 _The context menu follows the margin_
 
+## Settings
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| Left margin (pixels) | 220 | How much empty space to leave on the left of the taskbar content. |
+| Follow display DPI | on | Scale the margin with the display DPI, so it keeps the same visual size on high-DPI displays. Turn off to keep it at a constant physical pixel size. |
+| Displays | All | Which displays the margin applies to: all, only the primary one, or only the secondary ones. Each display has its own taskbar and its own DPI, so the margin is calculated per display. |
+
 ## Notes
 
 Requires Windows 11.
 
-The taskbar must be **left-aligned** (Settings → Personalization → Taskbar →
-Taskbar alignment). With centered alignment, the buttons move by only part of
-the margin while the context menu moves by all of it, so the two no longer line
-up.
+The taskbar must be:
 
-The taskbar is not mirrored correctly on right-to-left display languages: the
-margin is applied to the physical left regardless of the taskbar's flow
-direction, while the context menu is moved to the right.
+- **left-aligned** (Settings → Personalization → Taskbar → Taskbar icon alignment)
+- **Bottom** or **Top** (New in Windows 11 26H2, Settings → Personalization → Taskbar → Taskbar position)
+
+The taskbar is not mirrored correctly on right-to-left display languages:
+the margin is applied to the physical left regardless of the taskbar's flow direction,
+while the context menu is moved to the right.
 
 ## Compatibility
 
-- **Windows 11 Taskbar Styler** can be used alongside this mod. This mod reads
-  the taskbar's XAML tree directly instead of going through XAML diagnostics, so
-  it does not compete with the Styler for the single XAML diagnostics consumer
-  slot that Explorer allows. The Styler can also set the same padding itself,
-  but it cannot move the context menu, which is why this mod exists.
-  Note that some Styler themes set the same two properties this mod does, such
-  as DockLike (`RootGrid` padding) and Surface (the taskbar background margin).
-  With one of those themes, whichever of the two mods writes last wins, and
-  disabling this mod clears the value the theme had set.
 - **TranslucentTB** is confirmed compatible and can be used alongside this mod.
 - Tested on Windows 11 26H2.
 
 ## Suggested use
 
-Together with [FluentFlyout](https://github.com/unchihugo/FluentFlyout): enable
-the taskbar widget there, set its position to the bottom left corner, and turn
-on the fixed widget width. The taskbar elements then tile linearly instead of
-overlapping each other.
+For example, together with [FluentFlyout](https://github.com/unchihugo/FluentFlyout):
+enable the taskbar widget there, set its position to the bottom left corner,
+and turn on the fixed widget width. The taskbar elements then tile linearly instead of overlapping each other.
 
 ## Implementation notes
 
@@ -84,6 +82,17 @@ physical screen pixels.
 Shifting the taskbar's XAML content therefore does not move the menu on its own,
 because the menu is not placed relative to it. The mod adjusts the anchor point
 instead, which is why it hooks that function.
+
+## License
+
+GPL-3.0. The taskbar XAML access is based on the
+[Start button always on the left](https://github.com/m417z/my-windhawk-mods) mod
+by m417z, which is also licensed under GPL-3.0.
+
+## Feedback
+
+Bug reports and feature requests are welcome in
+[Issues](https://github.com/loliri/windhawk-taskbar-margin/issues).
 */
 // ==/WindhawkModReadme==
 
@@ -171,37 +180,39 @@ struct AppliedElement
     DependencyProperty property;
 };
 
-// The elements the mod has changed. Only the taskbar thread touches this, so it
-// is kept per thread.
+// The elements the mod has changed.
 thread_local std::vector<AppliedElement> g_appliedElements;
 
-void* CTaskBand_ITaskListWndSite_vftable;
+void *CTaskBand_ITaskListWndSite_vftable;
 
-void* CSecondaryTaskBand_ITaskListWndSite_vftable;
+void *CSecondaryTaskBand_ITaskListWndSite_vftable;
 
-using CTaskBand_GetTaskbarHost_t = void*(WINAPI*)(void* pThis, void** result);
+using CTaskBand_GetTaskbarHost_t = void *(WINAPI *)(void *pThis, void **result);
 CTaskBand_GetTaskbarHost_t CTaskBand_GetTaskbarHost_Original;
 
-void* TaskbarHost_FrameHeight_Original;
+void *TaskbarHost_FrameHeight_Original;
 
-using CSecondaryTaskBand_GetTaskbarHost_t = void*(WINAPI*)(void* pThis,
-                                                           void** result);
+using CSecondaryTaskBand_GetTaskbarHost_t = void *(WINAPI *)(void *pThis,
+                                                             void **result);
 CSecondaryTaskBand_GetTaskbarHost_t CSecondaryTaskBand_GetTaskbarHost_Original;
 
-using std__Ref_count_base__Decref_t = void(WINAPI*)(void* pThis);
+using std__Ref_count_base__Decref_t = void(WINAPI *)(void *pThis);
 std__Ref_count_base__Decref_t std__Ref_count_base__Decref_Original;
 
 // The taskbar's XAML tree is reached through its host object rather than
 // through XAML diagnostics, so that the mod can run alongside other mods which
 // need to be Explorer's XAML diagnostics consumer.
-XamlRoot XamlRootFromTaskbarHostSharedPtr(void* taskbarHostSharedPtr[2]) {
-    if (!taskbarHostSharedPtr[0] && !taskbarHostSharedPtr[1]) {
+XamlRoot XamlRootFromTaskbarHostSharedPtr(void *taskbarHostSharedPtr[2])
+{
+    if (!taskbarHostSharedPtr[0] && !taskbarHostSharedPtr[1])
+    {
         return nullptr;
     }
 
     // The element is only reachable through the host object, so a host that
     // exists without one yet has to be treated as not ready.
-    if (!taskbarHostSharedPtr[0]) {
+    if (!taskbarHostSharedPtr[0])
+    {
         std__Ref_count_base__Decref_Original(taskbarHostSharedPtr[1]);
         return nullptr;
     }
@@ -212,11 +223,14 @@ XamlRoot XamlRootFromTaskbarHostSharedPtr(void* taskbarHostSharedPtr[2]) {
     {
         // 48:83EC 28 | sub rsp,28
         // 48:83C1 48 | add rcx,48
-        const BYTE* b = (const BYTE*)TaskbarHost_FrameHeight_Original;
+        const BYTE *b = (const BYTE *)TaskbarHost_FrameHeight_Original;
         if (b[0] == 0x48 && b[1] == 0x83 && b[2] == 0xEC && b[4] == 0x48 &&
-            b[5] == 0x83 && b[6] == 0xC1 && b[7] <= 0x7F) {
+            b[5] == 0x83 && b[6] == 0xC1 && b[7] <= 0x7F)
+        {
             taskbarElementIUnknownOffset = b[7];
-        } else {
+        }
+        else
+        {
             Wh_Log(L"Unsupported TaskbarHost::FrameHeight");
         }
     }
@@ -226,11 +240,14 @@ XamlRoot XamlRootFromTaskbarHostSharedPtr(void* taskbarHostSharedPtr[2]) {
         // fd7bbfa9 stp     fp, lr, [sp, #-0x10]!
         // fd030091 mov     fp, sp
         // 080c41f8 ldr     x8, [x0, #0x10]!
-        const DWORD* p = (const DWORD*)TaskbarHost_FrameHeight_Original;
+        const DWORD *p = (const DWORD *)TaskbarHost_FrameHeight_Original;
         if (p[0] == 0xD503237F && (p[1] & 0xFFC07FFF) == 0xA9807BFD &&
-            p[2] == 0x910003FD && (p[3] & 0xFFF00FE0) == 0xF8400C00) {
+            p[2] == 0x910003FD && (p[3] & 0xFFF00FE0) == 0xF8400C00)
+        {
             taskbarElementIUnknownOffset = (p[3] >> 12) & 0xFF;
-        } else {
+        }
+        else
+        {
             Wh_Log(L"Unsupported TaskbarHost::FrameHeight");
         }
     }
@@ -238,9 +255,9 @@ XamlRoot XamlRootFromTaskbarHostSharedPtr(void* taskbarHostSharedPtr[2]) {
 #error "Unsupported architecture"
 #endif
 
-    auto* taskbarElementIUnknown =
-        *(IUnknown**)((BYTE*)taskbarHostSharedPtr[0] +
-                      taskbarElementIUnknownOffset);
+    auto *taskbarElementIUnknown =
+        *(IUnknown **)((BYTE *)taskbarHostSharedPtr[0] +
+                       taskbarElementIUnknownOffset);
 
     FrameworkElement taskbarElement = nullptr;
     taskbarElementIUnknown->QueryInterface(winrt::guid_of<FrameworkElement>(),
@@ -253,51 +270,59 @@ XamlRoot XamlRootFromTaskbarHostSharedPtr(void* taskbarHostSharedPtr[2]) {
     return result;
 }
 
-XamlRoot GetTaskbarXamlRoot(HWND hTaskbarWnd) {
+XamlRoot GetTaskbarXamlRoot(HWND hTaskbarWnd)
+{
     HWND hTaskSwWnd = (HWND)GetProp(hTaskbarWnd, L"TaskbandHWND");
-    if (!hTaskSwWnd) {
+    if (!hTaskSwWnd)
+    {
         return nullptr;
     }
 
-    void* taskBand = (void*)GetWindowLongPtr(hTaskSwWnd, 0);
-    void* taskBandForTaskListWndSite = taskBand;
-    for (int i = 0; *(void**)taskBandForTaskListWndSite !=
+    void *taskBand = (void *)GetWindowLongPtr(hTaskSwWnd, 0);
+    void *taskBandForTaskListWndSite = taskBand;
+    for (int i = 0; *(void **)taskBandForTaskListWndSite !=
                     CTaskBand_ITaskListWndSite_vftable;
-         i++) {
-        if (i == 20) {
+         i++)
+    {
+        if (i == 20)
+        {
             return nullptr;
         }
 
-        taskBandForTaskListWndSite = (void**)taskBandForTaskListWndSite + 1;
+        taskBandForTaskListWndSite = (void **)taskBandForTaskListWndSite + 1;
     }
 
-    void* taskbarHostSharedPtr[2]{};
+    void *taskbarHostSharedPtr[2]{};
     CTaskBand_GetTaskbarHost_Original(taskBandForTaskListWndSite,
                                       taskbarHostSharedPtr);
 
     return XamlRootFromTaskbarHostSharedPtr(taskbarHostSharedPtr);
 }
 
-XamlRoot GetSecondaryTaskbarXamlRoot(HWND hSecondaryTaskbarWnd) {
+XamlRoot GetSecondaryTaskbarXamlRoot(HWND hSecondaryTaskbarWnd)
+{
     HWND hTaskSwWnd =
         (HWND)FindWindowEx(hSecondaryTaskbarWnd, nullptr, L"WorkerW", nullptr);
-    if (!hTaskSwWnd) {
+    if (!hTaskSwWnd)
+    {
         return nullptr;
     }
 
-    void* taskBand = (void*)GetWindowLongPtr(hTaskSwWnd, 0);
-    void* taskBandForTaskListWndSite = taskBand;
-    for (int i = 0; *(void**)taskBandForTaskListWndSite !=
+    void *taskBand = (void *)GetWindowLongPtr(hTaskSwWnd, 0);
+    void *taskBandForTaskListWndSite = taskBand;
+    for (int i = 0; *(void **)taskBandForTaskListWndSite !=
                     CSecondaryTaskBand_ITaskListWndSite_vftable;
-         i++) {
-        if (i == 20) {
+         i++)
+    {
+        if (i == 20)
+        {
             return nullptr;
         }
 
-        taskBandForTaskListWndSite = (void**)taskBandForTaskListWndSite + 1;
+        taskBandForTaskListWndSite = (void **)taskBandForTaskListWndSite + 1;
     }
 
-    void* taskbarHostSharedPtr[2]{};
+    void *taskbarHostSharedPtr[2]{};
     CSecondaryTaskBand_GetTaskbarHost_Original(taskBandForTaskListWndSite,
                                                taskbarHostSharedPtr);
 
@@ -306,18 +331,22 @@ XamlRoot GetSecondaryTaskbarXamlRoot(HWND hSecondaryTaskbarWnd) {
 
 FrameworkElement EnumChildElements(
     FrameworkElement element,
-    std::function<bool(FrameworkElement)> enumCallback) {
+    std::function<bool(FrameworkElement)> enumCallback)
+{
     int childrenCount = Media::VisualTreeHelper::GetChildrenCount(element);
 
-    for (int i = 0; i < childrenCount; i++) {
+    for (int i = 0; i < childrenCount; i++)
+    {
         auto child = Media::VisualTreeHelper::GetChild(element, i)
                          .try_as<FrameworkElement>();
-        if (!child) {
+        if (!child)
+        {
             Wh_Log(L"Failed to get child %d of %d", i + 1, childrenCount);
             continue;
         }
 
-        if (enumCallback(child)) {
+        if (enumCallback(child))
+        {
             return child;
         }
     }
@@ -325,44 +354,50 @@ FrameworkElement EnumChildElements(
     return nullptr;
 }
 
-FrameworkElement FindChildByName(FrameworkElement element, PCWSTR name) {
-    return EnumChildElements(element, [name](FrameworkElement child) {
-        return child.Name() == name;
-    });
+FrameworkElement FindChildByName(FrameworkElement element, PCWSTR name)
+{
+    return EnumChildElements(element, [name](FrameworkElement child)
+                             { return child.Name() == name; });
 }
 
 FrameworkElement FindChildByClassName(FrameworkElement element,
-                                      PCWSTR className) {
-    return EnumChildElements(element, [className](FrameworkElement child) {
-        return winrt::get_class_name(child) == className;
-    });
+                                      PCWSTR className)
+{
+    return EnumChildElements(element, [className](FrameworkElement child)
+                             { return winrt::get_class_name(child) == className; });
 }
 
 // Whether the margin should be applied to the display the taskbar is on. The
 // primary display is the one whose top-left corner is the origin of the
 // virtual screen.
-bool ShouldApplyToMonitor(HMONITOR monitor) {
-    switch (g_settings.displays) {
-        case Displays::All:
-            return true;
+bool ShouldApplyToMonitor(HMONITOR monitor)
+{
+    switch (g_settings.displays)
+    {
+    case Displays::All:
+        return true;
 
-        case Displays::Primary: {
-            MONITORINFO monitorInfo{.cbSize = sizeof(MONITORINFO)};
-            if (!GetMonitorInfo(monitor, &monitorInfo)) {
-                return false;
-            }
-
-            return (monitorInfo.dwFlags & MONITORINFOF_PRIMARY) != 0;
+    case Displays::Primary:
+    {
+        MONITORINFO monitorInfo{.cbSize = sizeof(MONITORINFO)};
+        if (!GetMonitorInfo(monitor, &monitorInfo))
+        {
+            return false;
         }
 
-        case Displays::Secondary: {
-            MONITORINFO monitorInfo{.cbSize = sizeof(MONITORINFO)};
-            if (!GetMonitorInfo(monitor, &monitorInfo)) {
-                return false;
-            }
+        return (monitorInfo.dwFlags & MONITORINFOF_PRIMARY) != 0;
+    }
 
-            return (monitorInfo.dwFlags & MONITORINFOF_PRIMARY) == 0;
+    case Displays::Secondary:
+    {
+        MONITORINFO monitorInfo{.cbSize = sizeof(MONITORINFO)};
+        if (!GetMonitorInfo(monitor, &monitorInfo))
+        {
+            return false;
         }
+
+        return (monitorInfo.dwFlags & MONITORINFOF_PRIMARY) == 0;
+    }
     }
 
     return true;
@@ -371,35 +406,45 @@ bool ShouldApplyToMonitor(HMONITOR monitor) {
 // A margin in DIPs, which is what XAML expects. With DPI following on the
 // setting is taken as DIPs; with it off the setting is taken as physical pixels
 // and converted, so the margin keeps a constant physical size.
-double GetMarginInDips(FrameworkElement const& element, int marginPixels) {
-    if (g_settings.followDpi) {
+double GetMarginInDips(FrameworkElement const &element, int marginPixels)
+{
+    if (g_settings.followDpi)
+    {
         return static_cast<double>(marginPixels);
     }
 
-    try {
+    try
+    {
         auto xamlRoot = element.XamlRoot();
-        if (xamlRoot) {
+        if (xamlRoot)
+        {
             double scale = xamlRoot.RasterizationScale();
-            if (scale > 0) {
+            if (scale > 0)
+            {
                 return static_cast<double>(marginPixels) / scale;
             }
         }
-    } catch (winrt::hresult_error const& ex) {
+    }
+    catch (winrt::hresult_error const &ex)
+    {
         Wh_Log(L"Error %08X: %s", ex.code(), ex.message().c_str());
     }
 
     return static_cast<double>(marginPixels);
 }
 
-void ApplyMarginToTaskbar(HWND hTaskbarWnd, XamlRoot xamlRoot) {
+void ApplyMarginToTaskbar(HWND hTaskbarWnd, XamlRoot xamlRoot)
+{
     HMONITOR monitor =
         MonitorFromWindow(hTaskbarWnd, MONITOR_DEFAULTTONEAREST);
-    if (!ShouldApplyToMonitor(monitor)) {
+    if (!ShouldApplyToMonitor(monitor))
+    {
         return;
     }
 
     auto content = xamlRoot.Content().try_as<FrameworkElement>();
-    if (!content) {
+    if (!content)
+    {
         Wh_Log(L"Failed to get the taskbar content element");
         return;
     }
@@ -407,13 +452,15 @@ void ApplyMarginToTaskbar(HWND hTaskbarWnd, XamlRoot xamlRoot) {
     auto taskbarFrame = FindChildByClassName(content, L"Taskbar.TaskbarFrame");
     auto rootGrid = taskbarFrame ? FindChildByName(taskbarFrame, L"RootGrid")
                                  : nullptr;
-    if (!rootGrid) {
+    if (!rootGrid)
+    {
         Wh_Log(L"Failed to find the taskbar RootGrid");
         return;
     }
 
     auto grid = rootGrid.try_as<Controls::Grid>();
-    if (!grid) {
+    if (!grid)
+    {
         Wh_Log(L"RootGrid is not a Grid, skipping");
         return;
     }
@@ -429,23 +476,32 @@ void ApplyMarginToTaskbar(HWND hTaskbarWnd, XamlRoot xamlRoot) {
 
     auto taskbarBackground =
         FindChildByClassName(rootGrid, L"Taskbar.TaskbarBackground");
-    if (taskbarBackground) {
+    if (taskbarBackground)
+    {
         taskbarBackground.Margin(Thickness{-leftMargin, 0, 0, 0});
         g_appliedElements.push_back({winrt::make_weak(taskbarBackground),
                                      FrameworkElement::MarginProperty()});
-    } else {
+    }
+    else
+    {
         Wh_Log(L"Failed to find TaskbarBackground");
     }
 
     g_marginApplied.store(true);
 }
 
-void RemoveAppliedMargins() {
-    for (const auto& applied : g_appliedElements) {
-        if (auto element = applied.element.get()) {
-            try {
+void RemoveAppliedMargins()
+{
+    for (const auto &applied : g_appliedElements)
+    {
+        if (auto element = applied.element.get())
+        {
+            try
+            {
                 element.ClearValue(applied.property);
-            } catch (winrt::hresult_error const& ex) {
+            }
+            catch (winrt::hresult_error const &ex)
+            {
                 Wh_Log(L"Error %08X: %s", ex.code(), ex.message().c_str());
             }
         }
@@ -455,28 +511,30 @@ void RemoveAppliedMargins() {
     g_marginApplied.store(false);
 }
 
-using ComputeJumpViewPosition_t = HRESULT(WINAPI*)(
-    void* pThis,
-    void* pTaskBtnGroup,
+using ComputeJumpViewPosition_t = HRESULT(WINAPI *)(
+    void *pThis,
+    void *pTaskBtnGroup,
     int param2,
-    winrt::Windows::Foundation::Point* point,
-    winrt::Windows::UI::Xaml::HorizontalAlignment* hAlign,
-    winrt::Windows::UI::Xaml::VerticalAlignment* vAlign);
+    winrt::Windows::Foundation::Point *point,
+    winrt::Windows::UI::Xaml::HorizontalAlignment *hAlign,
+    winrt::Windows::UI::Xaml::VerticalAlignment *vAlign);
 
 ComputeJumpViewPosition_t ComputeJumpViewPosition_Original;
 
 HRESULT WINAPI ComputeJumpViewPosition_Hook(
-    void* pThis,
-    void* pTaskBtnGroup,
+    void *pThis,
+    void *pTaskBtnGroup,
     int param2,
-    winrt::Windows::Foundation::Point* point,
-    winrt::Windows::UI::Xaml::HorizontalAlignment* hAlign,
-    winrt::Windows::UI::Xaml::VerticalAlignment* vAlign) {
+    winrt::Windows::Foundation::Point *point,
+    winrt::Windows::UI::Xaml::HorizontalAlignment *hAlign,
+    winrt::Windows::UI::Xaml::VerticalAlignment *vAlign)
+{
     HRESULT hr = ComputeJumpViewPosition_Original(pThis, pTaskBtnGroup, param2,
                                                   point, hAlign, vAlign);
 
     if (FAILED(hr) || !point || g_unloading || !g_marginApplied.load() ||
-        !g_settings.leftMargin) {
+        !g_settings.leftMargin)
+    {
         return hr;
     }
 
@@ -486,17 +544,20 @@ HRESULT WINAPI ComputeJumpViewPosition_Hook(
     HMONITOR monitor =
         MonitorFromPoint(POINT{(LONG)point->X, (LONG)point->Y},
                          MONITOR_DEFAULTTONEAREST);
-    if (!ShouldApplyToMonitor(monitor)) {
+    if (!ShouldApplyToMonitor(monitor))
+    {
         return hr;
     }
 
     int offset = g_settings.leftMargin;
-    if (g_settings.followDpi) {
+    if (g_settings.followDpi)
+    {
         UINT dpiX = 0;
         UINT dpiY = 0;
         if (SUCCEEDED(
                 GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY)) &&
-            dpiX > 0) {
+            dpiX > 0)
+        {
             offset = MulDiv(g_settings.leftMargin, dpiX,
                             USER_DEFAULT_SCREEN_DPI);
         }
@@ -509,37 +570,44 @@ HRESULT WINAPI ComputeJumpViewPosition_Hook(
     return hr;
 }
 
-using RunFromWindowThreadProc_t = void(WINAPI*)(void* parameter);
+using RunFromWindowThreadProc_t = void(WINAPI *)(void *parameter);
 
 bool RunFromWindowThread(HWND hWnd,
                          RunFromWindowThreadProc_t proc,
-                         void* procParam) {
+                         void *procParam)
+{
     static const UINT runFromWindowThreadRegisteredMsg =
         RegisterWindowMessage(L"Windhawk_RunFromWindowThread_" WH_MOD_ID);
 
-    struct RUN_FROM_WINDOW_THREAD_PARAM {
+    struct RUN_FROM_WINDOW_THREAD_PARAM
+    {
         RunFromWindowThreadProc_t proc;
-        void* procParam;
+        void *procParam;
     };
 
     DWORD dwThreadId = GetWindowThreadProcessId(hWnd, nullptr);
-    if (dwThreadId == 0) {
+    if (dwThreadId == 0)
+    {
         return false;
     }
 
-    if (dwThreadId == GetCurrentThreadId()) {
+    if (dwThreadId == GetCurrentThreadId())
+    {
         proc(procParam);
         return true;
     }
 
     HHOOK hook = SetWindowsHookEx(
         WH_CALLWNDPROC,
-        [](int nCode, WPARAM wParam, LPARAM lParam) -> LRESULT {
-            if (nCode == HC_ACTION) {
-                const CWPSTRUCT* cwp = (const CWPSTRUCT*)lParam;
-                if (cwp->message == runFromWindowThreadRegisteredMsg) {
-                    RUN_FROM_WINDOW_THREAD_PARAM* param =
-                        (RUN_FROM_WINDOW_THREAD_PARAM*)cwp->lParam;
+        [](int nCode, WPARAM wParam, LPARAM lParam) -> LRESULT
+        {
+            if (nCode == HC_ACTION)
+            {
+                const CWPSTRUCT *cwp = (const CWPSTRUCT *)lParam;
+                if (cwp->message == runFromWindowThreadRegisteredMsg)
+                {
+                    RUN_FROM_WINDOW_THREAD_PARAM *param =
+                        (RUN_FROM_WINDOW_THREAD_PARAM *)cwp->lParam;
                     param->proc(param->procParam);
                 }
             }
@@ -547,7 +615,8 @@ bool RunFromWindowThread(HWND hWnd,
             return CallNextHookEx(nullptr, nCode, wParam, lParam);
         },
         nullptr, dwThreadId);
-    if (!hook) {
+    if (!hook)
+    {
         return false;
     }
 
@@ -575,11 +644,16 @@ thread_local int g_retryAttempts;
 constexpr int kMaxApplyAttempts = 20;
 constexpr int kApplyRetryIntervalMs = 500;
 
-void StopRetryTimer() {
-    if (g_retryTimer) {
-        try {
+void StopRetryTimer()
+{
+    if (g_retryTimer)
+    {
+        try
+        {
             g_retryTimer.Stop();
-        } catch (winrt::hresult_error const& ex) {
+        }
+        catch (winrt::hresult_error const &ex)
+        {
             Wh_Log(L"Error %08X: %s", ex.code(), ex.message().c_str());
         }
     }
@@ -589,36 +663,44 @@ void StopRetryTimer() {
     g_retryAttempts = 0;
 }
 
-void RetryTimerTick(winrt::Windows::System::DispatcherQueueTimer const&,
-                    winrt::Windows::Foundation::IInspectable const&) {
-    if (g_unloading) {
+void RetryTimerTick(winrt::Windows::System::DispatcherQueueTimer const &,
+                    winrt::Windows::Foundation::IInspectable const &)
+{
+    if (g_unloading)
+    {
         StopRetryTimer();
         return;
     }
 
     ApplySettingsFromTaskbarThread();
 
-    if (g_marginApplied.load()) {
+    if (g_marginApplied.load())
+    {
         Wh_Log(L"Applied on attempt %d", g_retryAttempts + 1);
         StopRetryTimer();
         return;
     }
 
-    if (++g_retryAttempts >= kMaxApplyAttempts) {
+    if (++g_retryAttempts >= kMaxApplyAttempts)
+    {
         Wh_Log(L"Gave up applying the margin");
         StopRetryTimer();
     }
 }
 
-void StartRetryTimer() {
-    if (g_retryTimer) {
+void StartRetryTimer()
+{
+    if (g_retryTimer)
+    {
         return;
     }
 
-    try {
+    try
+    {
         auto dispatcherQueue =
             winrt::Windows::System::DispatcherQueue::GetForCurrentThread();
-        if (!dispatcherQueue) {
+        if (!dispatcherQueue)
+        {
             Wh_Log(L"No dispatcher queue, cannot retry");
             return;
         }
@@ -630,38 +712,50 @@ void StartRetryTimer() {
         g_retryTimerRevoker = g_retryTimer.Tick(winrt::auto_revoke,
                                                 RetryTimerTick);
         g_retryTimer.Start();
-    } catch (winrt::hresult_error const& ex) {
+    }
+    catch (winrt::hresult_error const &ex)
+    {
         Wh_Log(L"Error %08X: %s", ex.code(), ex.message().c_str());
     }
 }
 
-void ApplySettingsFromTaskbarThread() {
+void ApplySettingsFromTaskbarThread()
+{
     Wh_Log(L">");
 
     RemoveAppliedMargins();
 
-    if (g_unloading) {
+    if (g_unloading)
+    {
         return;
     }
 
     EnumThreadWindows(
         GetCurrentThreadId(),
-        [](HWND hWnd, LPARAM) -> BOOL {
+        [](HWND hWnd, LPARAM) -> BOOL
+        {
             WCHAR szClassName[32];
-            if (GetClassName(hWnd, szClassName, ARRAYSIZE(szClassName)) == 0) {
+            if (GetClassName(hWnd, szClassName, ARRAYSIZE(szClassName)) == 0)
+            {
                 return TRUE;
             }
 
             XamlRoot xamlRoot = nullptr;
-            if (_wcsicmp(szClassName, L"Shell_TrayWnd") == 0) {
+            if (_wcsicmp(szClassName, L"Shell_TrayWnd") == 0)
+            {
                 xamlRoot = GetTaskbarXamlRoot(hWnd);
-            } else if (_wcsicmp(szClassName, L"Shell_SecondaryTrayWnd") == 0) {
+            }
+            else if (_wcsicmp(szClassName, L"Shell_SecondaryTrayWnd") == 0)
+            {
                 xamlRoot = GetSecondaryTaskbarXamlRoot(hWnd);
-            } else {
+            }
+            else
+            {
                 return TRUE;
             }
 
-            if (!xamlRoot) {
+            if (!xamlRoot)
+            {
                 Wh_Log(L"Getting XamlRoot failed");
                 return TRUE;
             }
@@ -673,49 +767,61 @@ void ApplySettingsFromTaskbarThread() {
         0);
 }
 
-void ApplySettingsOnTaskbarThread() {
+void ApplySettingsOnTaskbarThread()
+{
     ApplySettingsFromTaskbarThread();
 
-    if (!g_unloading && !g_marginApplied.load()) {
+    if (!g_unloading && !g_marginApplied.load())
+    {
         Wh_Log(L"Taskbar XAML not ready, will retry");
         StartRetryTimer();
     }
 }
 
-void ApplySettings(HWND hTaskbarWnd) {
+void ApplySettings(HWND hTaskbarWnd)
+{
     RunFromWindowThread(
-        hTaskbarWnd, [](void*) { ApplySettingsOnTaskbarThread(); }, nullptr);
+        hTaskbarWnd, [](void *)
+        { ApplySettingsOnTaskbarThread(); }, nullptr);
 }
 
-void RemoveSettingsFromTaskbarThread() {
+void RemoveSettingsFromTaskbarThread()
+{
     StopRetryTimer();
     RemoveAppliedMargins();
 }
 
-void RemoveSettings(HWND hTaskbarWnd) {
+void RemoveSettings(HWND hTaskbarWnd)
+{
     RunFromWindowThread(
-        hTaskbarWnd, [](void*) { RemoveSettingsFromTaskbarThread(); },
+        hTaskbarWnd, [](void *)
+        { RemoveSettingsFromTaskbarThread(); },
         nullptr);
 }
 
 // Every taskbar lives on its own thread with its own thread-local state, so
 // each has to be visited on its own thread.
-void ForEachTaskbarWindow(void (*proc)(HWND)) {
+void ForEachTaskbarWindow(void (*proc)(HWND))
+{
     EnumWindows(
-        [](HWND hWnd, LPARAM lParam) -> BOOL {
+        [](HWND hWnd, LPARAM lParam) -> BOOL
+        {
             DWORD dwProcessId = 0;
             if (!GetWindowThreadProcessId(hWnd, &dwProcessId) ||
-                dwProcessId != GetCurrentProcessId()) {
+                dwProcessId != GetCurrentProcessId())
+            {
                 return TRUE;
             }
 
             WCHAR szClassName[32];
-            if (GetClassName(hWnd, szClassName, ARRAYSIZE(szClassName)) == 0) {
+            if (GetClassName(hWnd, szClassName, ARRAYSIZE(szClassName)) == 0)
+            {
                 return TRUE;
             }
 
             if (_wcsicmp(szClassName, L"Shell_TrayWnd") == 0 ||
-                _wcsicmp(szClassName, L"Shell_SecondaryTrayWnd") == 0) {
+                _wcsicmp(szClassName, L"Shell_SecondaryTrayWnd") == 0)
+            {
                 reinterpret_cast<void (*)(HWND)>(lParam)(hWnd);
             }
 
@@ -724,18 +830,22 @@ void ForEachTaskbarWindow(void (*proc)(HWND)) {
         reinterpret_cast<LPARAM>(proc));
 }
 
-void OnWindowCreated(HWND hWnd, LPCWSTR lpClassName) {
-    if (!lpClassName) {
+void OnWindowCreated(HWND hWnd, LPCWSTR lpClassName)
+{
+    if (!lpClassName)
+    {
         return;
     }
 
     BOOL bTextualClassName = ((ULONG_PTR)lpClassName & ~(ULONG_PTR)0xffff) != 0;
-    if (!bTextualClassName) {
+    if (!bTextualClassName)
+    {
         return;
     }
 
     if (_wcsicmp(lpClassName, L"Shell_TrayWnd") == 0 ||
-        _wcsicmp(lpClassName, L"Shell_SecondaryTrayWnd") == 0) {
+        _wcsicmp(lpClassName, L"Shell_SecondaryTrayWnd") == 0)
+    {
         Wh_Log(L"Taskbar window created: %08X", (DWORD)(ULONG_PTR)hWnd);
         ApplySettings(hWnd);
     }
@@ -754,11 +864,13 @@ HWND WINAPI CreateWindowExW_Hook(DWORD dwExStyle,
                                  HWND hWndParent,
                                  HMENU hMenu,
                                  HINSTANCE hInstance,
-                                 PVOID lpParam) {
+                                 PVOID lpParam)
+{
     HWND hWnd = CreateWindowExW_Original(dwExStyle, lpClassName, lpWindowName,
                                          dwStyle, X, Y, nWidth, nHeight,
                                          hWndParent, hMenu, hInstance, lpParam);
-    if (!hWnd) {
+    if (!hWnd)
+    {
         return hWnd;
     }
 
@@ -767,19 +879,19 @@ HWND WINAPI CreateWindowExW_Hook(DWORD dwExStyle,
     return hWnd;
 }
 
-using CreateWindowInBand_t = HWND(WINAPI*)(DWORD dwExStyle,
-                                           LPCWSTR lpClassName,
-                                           LPCWSTR lpWindowName,
-                                           DWORD dwStyle,
-                                           int X,
-                                           int Y,
-                                           int nWidth,
-                                           int nHeight,
-                                           HWND hWndParent,
-                                           HMENU hMenu,
-                                           HINSTANCE hInstance,
-                                           PVOID lpParam,
-                                           DWORD dwBand);
+using CreateWindowInBand_t = HWND(WINAPI *)(DWORD dwExStyle,
+                                            LPCWSTR lpClassName,
+                                            LPCWSTR lpWindowName,
+                                            DWORD dwStyle,
+                                            int X,
+                                            int Y,
+                                            int nWidth,
+                                            int nHeight,
+                                            HWND hWndParent,
+                                            HMENU hMenu,
+                                            HINSTANCE hInstance,
+                                            PVOID lpParam,
+                                            DWORD dwBand);
 CreateWindowInBand_t CreateWindowInBand_Original;
 HWND WINAPI CreateWindowInBand_Hook(DWORD dwExStyle,
                                     LPCWSTR lpClassName,
@@ -793,11 +905,13 @@ HWND WINAPI CreateWindowInBand_Hook(DWORD dwExStyle,
                                     HMENU hMenu,
                                     HINSTANCE hInstance,
                                     PVOID lpParam,
-                                    DWORD dwBand) {
+                                    DWORD dwBand)
+{
     HWND hWnd = CreateWindowInBand_Original(
         dwExStyle, lpClassName, lpWindowName, dwStyle, X, Y, nWidth, nHeight,
         hWndParent, hMenu, hInstance, lpParam, dwBand);
-    if (!hWnd) {
+    if (!hWnd)
+    {
         return hWnd;
     }
 
@@ -806,20 +920,20 @@ HWND WINAPI CreateWindowInBand_Hook(DWORD dwExStyle,
     return hWnd;
 }
 
-using CreateWindowInBandEx_t = HWND(WINAPI*)(DWORD dwExStyle,
-                                             LPCWSTR lpClassName,
-                                             LPCWSTR lpWindowName,
-                                             DWORD dwStyle,
-                                             int X,
-                                             int Y,
-                                             int nWidth,
-                                             int nHeight,
-                                             HWND hWndParent,
-                                             HMENU hMenu,
-                                             HINSTANCE hInstance,
-                                             PVOID lpParam,
-                                             DWORD dwBand,
-                                             DWORD dwTypeFlags);
+using CreateWindowInBandEx_t = HWND(WINAPI *)(DWORD dwExStyle,
+                                              LPCWSTR lpClassName,
+                                              LPCWSTR lpWindowName,
+                                              DWORD dwStyle,
+                                              int X,
+                                              int Y,
+                                              int nWidth,
+                                              int nHeight,
+                                              HWND hWndParent,
+                                              HMENU hMenu,
+                                              HINSTANCE hInstance,
+                                              PVOID lpParam,
+                                              DWORD dwBand,
+                                              DWORD dwTypeFlags);
 CreateWindowInBandEx_t CreateWindowInBandEx_Original;
 HWND WINAPI CreateWindowInBandEx_Hook(DWORD dwExStyle,
                                       LPCWSTR lpClassName,
@@ -834,11 +948,13 @@ HWND WINAPI CreateWindowInBandEx_Hook(DWORD dwExStyle,
                                       HINSTANCE hInstance,
                                       PVOID lpParam,
                                       DWORD dwBand,
-                                      DWORD dwTypeFlags) {
+                                      DWORD dwTypeFlags)
+{
     HWND hWnd = CreateWindowInBandEx_Original(
         dwExStyle, lpClassName, lpWindowName, dwStyle, X, Y, nWidth, nHeight,
         hWndParent, hMenu, hInstance, lpParam, dwBand, dwTypeFlags);
-    if (!hWnd) {
+    if (!hWnd)
+    {
         return hWnd;
     }
 
@@ -847,18 +963,21 @@ HWND WINAPI CreateWindowInBandEx_Hook(DWORD dwExStyle,
     return hWnd;
 }
 
-HWND FindCurrentProcessTaskbarWnd() {
+HWND FindCurrentProcessTaskbarWnd()
+{
     HWND hTaskbarWnd = nullptr;
 
     EnumWindows(
-        [](HWND hWnd, LPARAM lParam) -> BOOL {
+        [](HWND hWnd, LPARAM lParam) -> BOOL
+        {
             DWORD dwProcessId;
             WCHAR className[32];
             if (GetWindowThreadProcessId(hWnd, &dwProcessId) &&
                 dwProcessId == GetCurrentProcessId() &&
                 GetClassName(hWnd, className, ARRAYSIZE(className)) &&
-                _wcsicmp(className, L"Shell_TrayWnd") == 0) {
-                *reinterpret_cast<HWND*>(lParam) = hWnd;
+                _wcsicmp(className, L"Shell_TrayWnd") == 0)
+            {
+                *reinterpret_cast<HWND *>(lParam) = hWnd;
                 return FALSE;
             }
             return TRUE;
@@ -868,10 +987,12 @@ HWND FindCurrentProcessTaskbarWnd() {
     return hTaskbarWnd;
 }
 
-bool HookTaskbarDllSymbols() {
+bool HookTaskbarDllSymbols()
+{
     HMODULE module =
         LoadLibraryEx(L"taskbar.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
-    if (!module) {
+    if (!module)
+    {
         Wh_Log(L"Failed to load taskbar.dll");
         return false;
     }
@@ -908,7 +1029,8 @@ bool HookTaskbarDllSymbols() {
         },
     };
 
-    if (!HookSymbols(module, taskbarDllHooks, ARRAYSIZE(taskbarDllHooks))) {
+    if (!HookSymbols(module, taskbarDllHooks, ARRAYSIZE(taskbarDllHooks)))
+    {
         Wh_Log(L"HookSymbols failed");
         return false;
     }
@@ -916,9 +1038,11 @@ bool HookTaskbarDllSymbols() {
     return true;
 }
 
-void LoadSettings() {
+void LoadSettings()
+{
     g_settings.leftMargin = Wh_GetIntSetting(L"leftMargin");
-    if (g_settings.leftMargin < 0) {
+    if (g_settings.leftMargin < 0)
+    {
         g_settings.leftMargin = 0;
     }
 
@@ -927,19 +1051,24 @@ void LoadSettings() {
     g_settings.displays = Displays::All;
     WindhawkUtils::StringSetting displays =
         WindhawkUtils::StringSetting::make(L"displays");
-    if (wcscmp(displays, L"primary") == 0) {
+    if (wcscmp(displays, L"primary") == 0)
+    {
         g_settings.displays = Displays::Primary;
-    } else if (wcscmp(displays, L"secondary") == 0) {
+    }
+    else if (wcscmp(displays, L"secondary") == 0)
+    {
         g_settings.displays = Displays::Secondary;
     }
 }
 
-BOOL Wh_ModInit() {
+BOOL Wh_ModInit()
+{
     Wh_Log(L">");
 
     LoadSettings();
 
-    if (!HookTaskbarDllSymbols()) {
+    if (!HookTaskbarDllSymbols())
+    {
         return FALSE;
     }
 
@@ -948,10 +1077,12 @@ BOOL Wh_ModInit() {
 
     HMODULE user32Module =
         LoadLibraryEx(L"user32.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
-    if (user32Module) {
+    if (user32Module)
+    {
         auto pCreateWindowInBand = (CreateWindowInBand_t)GetProcAddress(
             user32Module, "CreateWindowInBand");
-        if (pCreateWindowInBand) {
+        if (pCreateWindowInBand)
+        {
             WindhawkUtils::SetFunctionHook(pCreateWindowInBand,
                                            CreateWindowInBand_Hook,
                                            &CreateWindowInBand_Original);
@@ -959,7 +1090,8 @@ BOOL Wh_ModInit() {
 
         auto pCreateWindowInBandEx = (CreateWindowInBandEx_t)GetProcAddress(
             user32Module, "CreateWindowInBandEx");
-        if (pCreateWindowInBandEx) {
+        if (pCreateWindowInBandEx)
+        {
             WindhawkUtils::SetFunctionHook(pCreateWindowInBandEx,
                                            CreateWindowInBandEx_Hook,
                                            &CreateWindowInBandEx_Original);
@@ -969,13 +1101,15 @@ BOOL Wh_ModInit() {
     return TRUE;
 }
 
-void Wh_ModAfterInit() {
+void Wh_ModAfterInit()
+{
     Wh_Log(L">");
 
     ForEachTaskbarWindow(ApplySettings);
 }
 
-void Wh_ModBeforeUninit() {
+void Wh_ModBeforeUninit()
+{
     Wh_Log(L">");
 
     g_unloading = true;
@@ -983,7 +1117,8 @@ void Wh_ModBeforeUninit() {
     ForEachTaskbarWindow(RemoveSettings);
 }
 
-void Wh_ModSettingsChanged() {
+void Wh_ModSettingsChanged()
+{
     Wh_Log(L">");
 
     LoadSettings();
