@@ -58,7 +58,12 @@ direction, while the context menu is moved to the right.
 - **Windows 11 Taskbar Styler** can be used alongside this mod. This mod reads
   the taskbar's XAML tree directly instead of going through XAML diagnostics, so
   it does not compete with the Styler for the single XAML diagnostics consumer
-  slot that Explorer allows.
+  slot that Explorer allows. The Styler can also set the same padding itself,
+  but it cannot move the context menu, which is why this mod exists.
+  Note that some Styler themes set the same two properties this mod does, such
+  as DockLike (`RootGrid` padding) and Surface (the taskbar background margin).
+  With one of those themes, whichever of the two mods writes last wins, and
+  disabling this mod clears the value the theme had set.
 - **TranslucentTB** is confirmed compatible and can be used alongside this mod.
 - Tested on Windows 11 26H2.
 
@@ -121,8 +126,8 @@ instead, which is why it hooks that function.
 // ==/WindhawkModSettings==
 
 #include <atomic>
+#include <chrono>
 #include <functional>
-#include <string>
 #include <vector>
 
 #undef GetCurrentTime
@@ -132,6 +137,7 @@ instead, which is why it hooks that function.
 #include <windhawk_utils.h>
 
 #include <winrt/Windows.Foundation.h>
+#include <winrt/Windows.System.h>
 #include <winrt/Windows.UI.Xaml.Controls.h>
 #include <winrt/Windows.UI.Xaml.Media.h>
 #include <winrt/Windows.UI.Xaml.h>
@@ -165,8 +171,8 @@ struct AppliedElement
     DependencyProperty property;
 };
 
-// The taskbars live on different threads, so the applied elements are tracked
-// per thread.
+// The elements the mod has changed. Only the taskbar thread touches this, so it
+// is kept per thread.
 thread_local std::vector<AppliedElement> g_appliedElements;
 
 void* CTaskBand_ITaskListWndSite_vftable;
@@ -190,6 +196,13 @@ std__Ref_count_base__Decref_t std__Ref_count_base__Decref_Original;
 // need to be Explorer's XAML diagnostics consumer.
 XamlRoot XamlRootFromTaskbarHostSharedPtr(void* taskbarHostSharedPtr[2]) {
     if (!taskbarHostSharedPtr[0] && !taskbarHostSharedPtr[1]) {
+        return nullptr;
+    }
+
+    // The element is only reachable through the host object, so a host that
+    // exists without one yet has to be treated as not ready.
+    if (!taskbarHostSharedPtr[0]) {
+        std__Ref_count_base__Decref_Original(taskbarHostSharedPtr[1]);
         return nullptr;
     }
 
@@ -548,10 +561,88 @@ bool RunFromWindowThread(HWND hWnd,
     return true;
 }
 
+void ApplySettingsFromTaskbarThread();
+
+// The taskbar's XAML tree is not ready when the taskbar window is created, so
+// the XamlRoot lookup fails at that point. Applying once and giving up is what
+// breaks a late start, where the taskbar is built after the mod loads, so the
+// apply is retried on a timer until it takes.
+thread_local winrt::Windows::System::DispatcherQueueTimer g_retryTimer{nullptr};
+thread_local winrt::Windows::System::DispatcherQueueTimer::Tick_revoker
+    g_retryTimerRevoker;
+thread_local int g_retryAttempts;
+
+constexpr int kMaxApplyAttempts = 20;
+constexpr int kApplyRetryIntervalMs = 500;
+
+void StopRetryTimer() {
+    if (g_retryTimer) {
+        try {
+            g_retryTimer.Stop();
+        } catch (winrt::hresult_error const& ex) {
+            Wh_Log(L"Error %08X: %s", ex.code(), ex.message().c_str());
+        }
+    }
+
+    g_retryTimerRevoker.revoke();
+    g_retryTimer = nullptr;
+    g_retryAttempts = 0;
+}
+
+void RetryTimerTick(winrt::Windows::System::DispatcherQueueTimer const&,
+                    winrt::Windows::Foundation::IInspectable const&) {
+    if (g_unloading) {
+        StopRetryTimer();
+        return;
+    }
+
+    ApplySettingsFromTaskbarThread();
+
+    if (g_marginApplied.load()) {
+        Wh_Log(L"Applied on attempt %d", g_retryAttempts + 1);
+        StopRetryTimer();
+        return;
+    }
+
+    if (++g_retryAttempts >= kMaxApplyAttempts) {
+        Wh_Log(L"Gave up applying the margin");
+        StopRetryTimer();
+    }
+}
+
+void StartRetryTimer() {
+    if (g_retryTimer) {
+        return;
+    }
+
+    try {
+        auto dispatcherQueue =
+            winrt::Windows::System::DispatcherQueue::GetForCurrentThread();
+        if (!dispatcherQueue) {
+            Wh_Log(L"No dispatcher queue, cannot retry");
+            return;
+        }
+
+        g_retryTimer = dispatcherQueue.CreateTimer();
+        g_retryTimer.IsRepeating(true);
+        g_retryTimer.Interval(
+            std::chrono::milliseconds{kApplyRetryIntervalMs});
+        g_retryTimerRevoker = g_retryTimer.Tick(winrt::auto_revoke,
+                                                RetryTimerTick);
+        g_retryTimer.Start();
+    } catch (winrt::hresult_error const& ex) {
+        Wh_Log(L"Error %08X: %s", ex.code(), ex.message().c_str());
+    }
+}
+
 void ApplySettingsFromTaskbarThread() {
     Wh_Log(L">");
 
     RemoveAppliedMargins();
+
+    if (g_unloading) {
+        return;
+    }
 
     EnumThreadWindows(
         GetCurrentThreadId(),
@@ -582,9 +673,55 @@ void ApplySettingsFromTaskbarThread() {
         0);
 }
 
+void ApplySettingsOnTaskbarThread() {
+    ApplySettingsFromTaskbarThread();
+
+    if (!g_unloading && !g_marginApplied.load()) {
+        Wh_Log(L"Taskbar XAML not ready, will retry");
+        StartRetryTimer();
+    }
+}
+
 void ApplySettings(HWND hTaskbarWnd) {
     RunFromWindowThread(
-        hTaskbarWnd, [](void*) { ApplySettingsFromTaskbarThread(); }, nullptr);
+        hTaskbarWnd, [](void*) { ApplySettingsOnTaskbarThread(); }, nullptr);
+}
+
+void RemoveSettingsFromTaskbarThread() {
+    StopRetryTimer();
+    RemoveAppliedMargins();
+}
+
+void RemoveSettings(HWND hTaskbarWnd) {
+    RunFromWindowThread(
+        hTaskbarWnd, [](void*) { RemoveSettingsFromTaskbarThread(); },
+        nullptr);
+}
+
+// Every taskbar lives on its own thread with its own thread-local state, so
+// each has to be visited on its own thread.
+void ForEachTaskbarWindow(void (*proc)(HWND)) {
+    EnumWindows(
+        [](HWND hWnd, LPARAM lParam) -> BOOL {
+            DWORD dwProcessId = 0;
+            if (!GetWindowThreadProcessId(hWnd, &dwProcessId) ||
+                dwProcessId != GetCurrentProcessId()) {
+                return TRUE;
+            }
+
+            WCHAR szClassName[32];
+            if (GetClassName(hWnd, szClassName, ARRAYSIZE(szClassName)) == 0) {
+                return TRUE;
+            }
+
+            if (_wcsicmp(szClassName, L"Shell_TrayWnd") == 0 ||
+                _wcsicmp(szClassName, L"Shell_SecondaryTrayWnd") == 0) {
+                reinterpret_cast<void (*)(HWND)>(lParam)(hWnd);
+            }
+
+            return TRUE;
+        },
+        reinterpret_cast<LPARAM>(proc));
 }
 
 void OnWindowCreated(HWND hWnd, LPCWSTR lpClassName) {
@@ -788,13 +925,13 @@ void LoadSettings() {
     g_settings.followDpi = Wh_GetIntSetting(L"followDpi") != 0;
 
     g_settings.displays = Displays::All;
-    PCWSTR displays = Wh_GetStringSetting(L"displays");
+    WindhawkUtils::StringSetting displays =
+        WindhawkUtils::StringSetting::make(L"displays");
     if (wcscmp(displays, L"primary") == 0) {
         g_settings.displays = Displays::Primary;
     } else if (wcscmp(displays, L"secondary") == 0) {
         g_settings.displays = Displays::Secondary;
     }
-    Wh_FreeStringSetting(displays);
 }
 
 BOOL Wh_ModInit() {
@@ -835,10 +972,7 @@ BOOL Wh_ModInit() {
 void Wh_ModAfterInit() {
     Wh_Log(L">");
 
-    HWND hTaskbarWnd = FindCurrentProcessTaskbarWnd();
-    if (hTaskbarWnd) {
-        ApplySettings(hTaskbarWnd);
-    }
+    ForEachTaskbarWindow(ApplySettings);
 }
 
 void Wh_ModBeforeUninit() {
@@ -846,25 +980,13 @@ void Wh_ModBeforeUninit() {
 
     g_unloading = true;
 
-    HWND hTaskbarWnd = FindCurrentProcessTaskbarWnd();
-    if (hTaskbarWnd) {
-        ApplySettings(hTaskbarWnd);
-    }
+    ForEachTaskbarWindow(RemoveSettings);
 }
 
-void Wh_ModUninit() {
-    Wh_Log(L">");
-}
-
-BOOL Wh_ModSettingsChanged(BOOL* bReload) {
+void Wh_ModSettingsChanged() {
     Wh_Log(L">");
 
     LoadSettings();
 
-    HWND hTaskbarWnd = FindCurrentProcessTaskbarWnd();
-    if (hTaskbarWnd) {
-        ApplySettings(hTaskbarWnd);
-    }
-
-    return TRUE;
+    ForEachTaskbarWindow(ApplySettings);
 }
