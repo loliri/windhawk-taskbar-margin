@@ -1,9 +1,9 @@
 // ==WindhawkMod==
-// @id              taskbar-left-margin
-// @name            Taskbar Left Margin
-// @name:zh-CN      任务栏左边距
-// @description     Adds a configurable left margin to the taskbar content
-// @description:zh-CN 为任务栏内容添加可调节的左边距
+// @id              taskbar-margin
+// @name            Taskbar Margin
+// @name:zh-CN      任务栏边距
+// @description     Adds a configurable margin to the taskbar content
+// @description:zh-CN 为任务栏内容添加可调节的边距
 // @version         1.0
 // @author          loliri
 // @github          https://github.com/loliri
@@ -19,11 +19,11 @@
 // https://github.com/m417z/my-windhawk-mods
 //
 // For bug reports and feature requests, please open an issue here:
-// https://github.com/loliri/windhawk-taskbar-left-margin/issues
+// https://github.com/loliri/windhawk-taskbar-margin/issues
 
 // ==WindhawkModReadme==
 /*
-# Taskbar Left Margin
+# Taskbar Margin
 
 Shifts the taskbar **content** to the right by a configurable number of pixels,
 leaving an empty margin on the left. The taskbar background stays full width,
@@ -31,14 +31,14 @@ and the taskbar context menu follows the content.
 
 Only the taskbar itself is affected.
 
-![Taskbar without the margin](https://raw.githubusercontent.com/loliri/windhawk-taskbar-left-margin/main/images/before.png) \
+![Taskbar without a margin](https://raw.githubusercontent.com/loliri/windhawk-taskbar-margin/main/images/before.png) \
 _Before_
 
-![Taskbar with a left margin](https://raw.githubusercontent.com/loliri/windhawk-taskbar-left-margin/main/images/after.png) \
+![Taskbar with a left margin](https://raw.githubusercontent.com/loliri/windhawk-taskbar-margin/main/images/after.png) \
 _After_
 
-![Taskbar context menu](https://raw.githubusercontent.com/loliri/windhawk-taskbar-left-margin/main/images/jumplist.png) \
-_The context menu follows the content_
+![Taskbar context menu](https://raw.githubusercontent.com/loliri/windhawk-taskbar-margin/main/images/jumplist.png) \
+_The context menu follows the margin_
 
 ## Notes
 
@@ -50,8 +50,8 @@ the margin while the context menu moves by all of it, so the two no longer line
 up.
 
 The taskbar is not mirrored correctly on right-to-left display languages: the
-margin is applied to the left regardless of the taskbar's flow direction, while
-the context menu is moved to the right.
+margin is applied to the physical left regardless of the taskbar's flow
+direction, while the context menu is moved to the right.
 
 ## Compatibility
 
@@ -97,8 +97,8 @@ instead, which is why it hooks that function.
   $name:zh-CN: 跟随显示器 DPI
   $description: >-
     Scale the margin together with the display DPI, so it keeps the same visual
-    size on high-DPI displays. Turn off to keep the margin at a constant
-    physical pixel size.
+    size on high-DPI displays. Turn off to keep it at a constant physical pixel
+    size.
   $description:zh-CN: >-
     让边距随显示器 DPI 一同缩放，在高 DPI 显示器上保持相同的视觉大小。关闭后边距将固定为恒定的物理像素数。
 - displays: all
@@ -355,12 +355,12 @@ bool ShouldApplyToMonitor(HMONITOR monitor) {
     return true;
 }
 
-// The margin in DIPs, which is what XAML expects. With DPI following on the
+// A margin in DIPs, which is what XAML expects. With DPI following on the
 // setting is taken as DIPs; with it off the setting is taken as physical pixels
 // and converted, so the margin keeps a constant physical size.
-double GetMarginInDips(FrameworkElement const& element) {
+double GetMarginInDips(FrameworkElement const& element, int marginPixels) {
     if (g_settings.followDpi) {
-        return static_cast<double>(g_settings.leftMargin);
+        return static_cast<double>(marginPixels);
     }
 
     try {
@@ -368,14 +368,14 @@ double GetMarginInDips(FrameworkElement const& element) {
         if (xamlRoot) {
             double scale = xamlRoot.RasterizationScale();
             if (scale > 0) {
-                return static_cast<double>(g_settings.leftMargin) / scale;
+                return static_cast<double>(marginPixels) / scale;
             }
         }
     } catch (winrt::hresult_error const& ex) {
         Wh_Log(L"Error %08X: %s", ex.code(), ex.message().c_str());
     }
 
-    return static_cast<double>(g_settings.leftMargin);
+    return static_cast<double>(marginPixels);
 }
 
 void ApplyMarginToTaskbar(HWND hTaskbarWnd, XamlRoot xamlRoot) {
@@ -405,18 +405,19 @@ void ApplyMarginToTaskbar(HWND hTaskbarWnd, XamlRoot xamlRoot) {
         return;
     }
 
-    double margin = GetMarginInDips(taskbarFrame);
+    double leftMargin =
+        GetMarginInDips(taskbarFrame, g_settings.leftMargin);
 
     // The padding shifts the taskbar content, and the background is pulled back
     // by the same amount so that it keeps spanning the full width.
-    grid.Padding(Thickness{margin, 0, 0, 0});
+    grid.Padding(Thickness{leftMargin, 0, 0, 0});
     g_appliedElements.push_back(
         {winrt::make_weak(rootGrid), Controls::Grid::PaddingProperty()});
 
     auto taskbarBackground =
         FindChildByClassName(rootGrid, L"Taskbar.TaskbarBackground");
     if (taskbarBackground) {
-        taskbarBackground.Margin(Thickness{-margin, 0, 0, 0});
+        taskbarBackground.Margin(Thickness{-leftMargin, 0, 0, 0});
         g_appliedElements.push_back({winrt::make_weak(taskbarBackground),
                                      FrameworkElement::MarginProperty()});
     } else {
