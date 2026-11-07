@@ -37,6 +37,9 @@ _Before_
 ![Taskbar with a left margin](https://raw.githubusercontent.com/loliri/windhawk-taskbar-margin/main/images/after.png) \
 _After_
 
+![Taskbar with a right margin](https://raw.githubusercontent.com/loliri/windhawk-taskbar-margin/main/images/right-placement.png) \
+_Right placement, with the FluentFlyout widget in the reserved space_
+
 ![Taskbar context menu](https://raw.githubusercontent.com/loliri/windhawk-taskbar-margin/main/images/jumplist.png) \
 _The context menu follows the margin_
 
@@ -66,7 +69,7 @@ The taskbar is not mirrored correctly on right-to-left display languages: the ma
 
 - **TranslucentTB** is confirmed compatible and can be used alongside this mod.
 - **Windows 11 Taskbar Styler** is not an alternative to this mod. It changes the taskbar itself, while this mod changes the position of the elements inside it. A taskbar restyled that way loses the taskbar's effects on the margin area, while this mod keeps them across the whole taskbar, margin included. It also cannot move the context menu (the jump list), which this mod does.
-- **Taskbar Styler compatibility**: with the right placement applied to secondary taskbars, Explorer can restart-loop with some Styler themes on Windows 11 26H2 build 26300 (possibly related to ramensoftware/windhawk-mods#6988). The left placement is not affected.
+- **Taskbar Styler compatibility**: with themes that customize the taskbar button metrics (e.g. Lucent, or the MacDock themes in ramensoftware/windhawk-mods#6988), Explorer can restart-loop with the right placement on Windows 11 26H2 build 26300 - on secondary taskbars, and on the primary taskbar as well if the taskbar icon size has been raised above the default (e.g. with the Taskbar height and icon size mod). Setting MediumTaskbarButtonExtent=55 does not prevent this. The left placement is not affected.
 - **Taskbar jump list on cursor pos** changes the same anchor point. Both mods offset it, so depending on the hook order the menu can open offset from the cursor. Use one or the other.
 - Tested on Windows 11 26H2.
 
