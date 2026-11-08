@@ -25,7 +25,7 @@ _The context menu follows the margin_
 | Right margin (pixels) | 350          | How much empty space to leave between the app list and the system tray.                                                                                                                                                                                       |
 | Follow display DPI    | on           | Scale the margin with the display DPI, so it keeps the same visual size on high-DPI displays. Turn off to keep it at a constant physical pixel size.                                                                                                          |
 | Displays              | All          | Which displays the margin applies to: all, only the primary one, only the secondary ones, or only a specific one. Each display has its own taskbar and its own DPI, so the margin is calculated per display.                                                  |
-| Specific display      | \\.\DISPLAY1 | The device name of the display the margin applies to when Displays is set to "Specific display only". The comparison is case-insensitive, and an empty value matches no display. The device name of the display each taskbar is on is written to the mod log. |
+| Specific display      | `\\.\DISPLAY1` | The device name of the display the margin applies to when Displays is set to "Specific display only". The comparison is case-insensitive, and an empty value matches no display. The device name of the display each taskbar is on is written to the mod log. |
 
 ## Notes
 
@@ -41,7 +41,7 @@ The taskbar is not mirrored correctly on right-to-left display languages: the ma
 ## Compatibility
 
 - **TranslucentTB** is confirmed compatible and can be used alongside this mod.
-- **Windows 11 Taskbar Styler** is not an alternative to this mod. It changes the taskbar itself, while this mod changes the position of the elements inside it. A taskbar restyled that way loses the taskbar's effects on the margin area, while this mod keeps them across the whole taskbar, margin included. It also cannot move the context menu (the jump list), which this mod does.
+- **Windows 11 Taskbar Styler** is not an alternative to this mod for the left placement. It changes the taskbar itself, while this mod changes the position of the elements inside it. A taskbar restyled that way loses the taskbar's effects on the margin area, while this mod keeps them across the whole taskbar, margin included. It also cannot move the context menu (the jump list), which this mod does. For the right placement, a single Styler rule can grow the app list margin in the same way; what this mod adds there is the per-display scope and the option not to follow the display DPI.
 - **Taskbar Styler compatibility**: with themes that customize the taskbar button metrics (e.g. Lucent, or the MacDock themes in ramensoftware/windhawk-mods#6988), Explorer can restart-loop with the right placement on Windows 11 26H2 build 26300 - on secondary taskbars, and on the primary taskbar as well if the Small icon size is set above its default in the Taskbar height and icon size mod. Setting MediumTaskbarButtonExtent=55 does not prevent this. The left placement is not affected.
 - **Taskbar jump list on cursor pos** changes the same anchor point. Both mods offset it, so depending on the hook order the menu can open offset from the cursor. Use one or the other.
 - Tested on Windows 11 26H2.
