@@ -6,7 +6,7 @@
 // @description     Adds a configurable margin to the taskbar content
 // @description:zh-CN 为任务栏内容添加可调节的边距
 // @description:ja-JP タスクバーのコンテンツに、幅を設定できる余白を追加します
-// @version         1.0
+// @version         1.1
 // @author          loliri
 // @github          https://github.com/loliri
 // @include         explorer.exe
@@ -45,14 +45,14 @@ _The context menu follows the margin_
 
 ## Settings
 
-| Setting | Default | Description |
-| --- | --- | --- |
-| Placement | Left | Which side of the taskbar content the margin is placed on. The right side leaves the space between the app list and the system tray. |
-| Left margin (pixels) | 220 | How much empty space to leave on the left of the taskbar content. |
-| Right margin (pixels) | 350 | How much empty space to leave between the app list and the system tray. |
-| Follow display DPI | on | Scale the margin with the display DPI, so it keeps the same visual size on high-DPI displays. Turn off to keep it at a constant physical pixel size. |
-| Displays | All | Which displays the margin applies to: all, only the primary one, only the secondary ones, or only a specific one. Each display has its own taskbar and its own DPI, so the margin is calculated per display. |
-| Specific display | \\.\DISPLAY1 | The device name of the display the margin applies to when Displays is set to "Specific display only". The comparison is case-insensitive, and an empty value matches no display. The device name of the display each taskbar is on is written to the mod log. |
+| Setting               | Default      | Description                                                                                                                                                                                                                                                   |
+| --------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Placement             | Left         | Which side of the taskbar content the margin is placed on. The right side leaves the space between the app list and the system tray.                                                                                                                          |
+| Left margin (pixels)  | 220          | How much empty space to leave on the left of the taskbar content.                                                                                                                                                                                             |
+| Right margin (pixels) | 350          | How much empty space to leave between the app list and the system tray.                                                                                                                                                                                       |
+| Follow display DPI    | on           | Scale the margin with the display DPI, so it keeps the same visual size on high-DPI displays. Turn off to keep it at a constant physical pixel size.                                                                                                          |
+| Displays              | All          | Which displays the margin applies to: all, only the primary one, only the secondary ones, or only a specific one. Each display has its own taskbar and its own DPI, so the margin is calculated per display.                                                  |
+| Specific display      | \\.\DISPLAY1 | The device name of the display the margin applies to when Displays is set to "Specific display only". The comparison is case-insensitive, and an empty value matches no display. The device name of the display each taskbar is on is written to the mod log. |
 
 ## Notes
 
@@ -75,9 +75,10 @@ The taskbar is not mirrored correctly on right-to-left display languages: the ma
 
 ## Suggested use
 
-For example, together with [FluentFlyout](https://github.com/unchihugo/FluentFlyout): enable the taskbar widget there, set its position to the bottom left corner, and turn on the fixed widget width. The taskbar elements then tile linearly instead of overlapping each other.
+The mod is meant for widgets that are drawn on top of the taskbar, such as the taskbar widget of [FluentFlyout](https://github.com/unchihugo/FluentFlyout) or the taskbar lyrics of [Lyricify](https://github.com/WXRIW/Lyricify-App) (Lyricify Fusion). Without reserved space, they overlap the taskbar buttons. Reserve the space on the side where the widget is shown, and set the margin to the widget's width:
 
-With the placement set to the right, the space is left between the app list and the system tray instead, and the tray itself does not move. That suits the FluentFlyout taskbar widget in its usual place at the bottom right corner: set the right margin to the widget's width, and the widget gets the reserved space instead of overlapping the app list.
+- **Widget at the left end:** use the left placement. The whole taskbar content shifts to the right, so the taskbar elements tile linearly instead of overlapping each other. With FluentFlyout, set the widget's position to the bottom left corner and turn on the fixed widget width.
+- **Widget at the right end, next to the system tray:** use the right placement. The space is left between the app list and the system tray, and the tray itself does not move. For example, this suits FluentFlyout in its usual place at the bottom right corner.
 
 ## Implementation notes
 
